@@ -19,7 +19,6 @@ dex_supermimic.egg-info/
 *.o
 *.obj
 
-.github/
 .venv/
 venv/
 .vscode/
@@ -51,3 +50,9 @@ webplay_hoi.py
 /thirdparty/
 # This OBJ is a MuJoCo model asset, not a compiled object file.
 !src/dex_supermimic/assets/resources/inhand_cube/meshes/*.obj
+
+# Local experiment evidence and large model artifacts
+/reproduction_a100/
+/resource_check.json
+*.pt
+*.pth

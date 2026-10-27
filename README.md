@@ -1,5 +1,9 @@
 # Dex SuperMimic
 
+> **Fork addition:** an optional model-free PPO baseline and complete-episode return logging.
+> Upstream SuperMimic remains the default. See [PPO run instructions and comparison limitations](docs/PPO_BASELINE.md).
+> PPO code and comparison notes are additions in this fork, not claims by the upstream author.
+
 ![Dex SuperMimic teaser](teaser.jpg)
 
 This repository reproduces [SuperMimic](https://supermimic.github.io/) on a dexterous hand, adapting its world-model-based training approach to in-hand cube reorientation with Wuji Hand 2. It is built on mjlab and MuJoCo Warp.

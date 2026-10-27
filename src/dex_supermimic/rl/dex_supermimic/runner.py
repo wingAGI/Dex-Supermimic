@@ -19,6 +19,7 @@ from torch.nn import functional as F
 from .rotations import mv, quat_to_mat
 
 from .metrics import MetricLogger
+from .episode_returns import EpisodeReturnRecorder
 from .buffer import ReplayBuffer
 from .common import RunningNorm
 from .networks import Actor, Critic, FailureHead, WorldModel
@@ -220,6 +221,8 @@ class DexSuperMimicRunner:
 
     @torch.no_grad()
     def collect(self, steps):
+        if not hasattr(self, "episode_return_recorder"):
+            self.episode_return_recorder = EpisodeReturnRecorder(self.log_dir, self.env.num_envs, self.device, self.sim_steps)
         gaps = []
         term_gaps = {}
         rewards = []
@@ -234,6 +237,13 @@ class DexSuperMimicRunner:
             action = (self.actor(self.obs) + self.cfg.action_noise * torch.randn_like(m["a1"])).clamp(-1, 1)
             obs, reward, terminated, truncated, _ = self.env.step(action)
             cap = self.reader.reward_snapshot
+            self.episode_return_recorder.record(
+                reward, terminated, truncated,
+                interactions=self.sim_steps + self.env.num_envs,
+                elapsed_seconds=self.wall_offset + time.perf_counter() - self.started_at,
+                reasons={k: self.env.termination_manager.get_term(k)
+                         for k in self.env.termination_manager.active_terms},
+            )
             c = self.env.action_manager.get_term("joint_pos").processed_action.clone()
             u = c - self.reader.robot.data.encoder_bias
             next_x = self.reader.state()
@@ -742,11 +752,15 @@ class DexSuperMimicRunner:
         temporary.replace(path)
 
     def close(self):
+        if hasattr(self, "episode_return_recorder"):
+            self.episode_return_recorder.close()
         self.writer.close()
         self.reader.detach_capture()
 
     def load(self, path):
         state = torch.load(path, map_location=self.device, weights_only=False)
+        if state["config"].get("algorithm", "supermimic") != "supermimic":
+            raise ValueError("Cannot resume PPO checkpoint as SuperMimic")
         if "utd" not in state["config"] or "critic_minibatches" not in state["config"]:
             raise ValueError(
                 "Checkpoint predates the SuperMimic training recipe. Start a fresh run, "

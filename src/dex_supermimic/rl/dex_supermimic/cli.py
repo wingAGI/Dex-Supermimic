@@ -1,7 +1,8 @@
-"""Dedicated entry points; no PPO runner or reference-repository imports."""
+"""Training algorithm selection and shared actor playback entry points."""
 
 import json
 import random
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -17,12 +18,17 @@ def train():
 
 
 def train_config(cfg, folder=None):
+    launched_at = time.perf_counter()
     if not cfg.device.startswith("cuda") or not torch.cuda.is_available():
         raise RuntimeError("Training requires an NVIDIA CUDA GPU.")
     import warp as wp
     from mjlab.envs import ManagerBasedRlEnv
     from dex_supermimic.tasks.dex_reorient.config.wuji_hand2.task import make_env_cfg
-    from .runner import DexSuperMimicRunner
+
+    if cfg.algorithm == "ppo":
+        from .ppo_runner import ModelFreePPORunner as Runner
+    else:
+        from .runner import DexSuperMimicRunner as Runner
 
     random.seed(cfg.seed)
     np.random.seed(cfg.seed)
@@ -36,7 +42,9 @@ def train_config(cfg, folder=None):
     folder = Path(folder) if folder else Path(cfg.log_dir) / datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     runner = None
     try:
-        runner = DexSuperMimicRunner(env, cfg, folder)
+        runner = Runner(env, cfg, folder)
+        if not cfg.checkpoint:
+            runner.started_at = launched_at  # Both algorithms include environment/model initialization.
         try:
             runner.learn()
         except KeyboardInterrupt:
@@ -140,8 +148,11 @@ def play():
         try:
             env.reset()
             viewer = DexViserPlayViewer(
-                env, policy=lambda obs: actor(obs["policy"]), checkpoint=checkpoint,
-                wm_horizon=cfg.wm_horizon, wm_opacity=cfg.wm_opacity,
+                env,
+                policy=lambda obs: actor(obs["policy"]),
+                checkpoint=checkpoint,
+                wm_horizon=cfg.wm_horizon,
+                wm_opacity=cfg.wm_opacity,
             )
             viewer.run(num_steps=cfg.steps or None)
         finally:
